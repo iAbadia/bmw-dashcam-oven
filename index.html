@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BMW Dashcam Metadata Burner</title>
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="description" content="Burn BMW dashcam metadata (date/time/speed/GPS) into video in your browser." />
+  </head>
+  <body>
+    <header>
+      <h1>BMW Dashcam Metadata Burner</h1>
+      <p>Works in your browser. No uploads. Ideal for GitHub Pages.</p>
+    </header>
+
+    <main>
+      <section class="inputs">
+        <div class="input hidden">
+          <label for="method">Processing method</label>
+          <select id="method" disabled>
+            <option value="realtime" selected>Real‑time (Canvas + MediaRecorder)</option>
+          </select>
+        </div>
+        <div class="input">
+          <label for="metadataFile">Metadata JSON</label>
+          <input id="metadataFile" type="file" accept="application/json" />
+        </div>
+        <div class="input">
+          <label for="videoFiles">Video .ts file(s)</label>
+          <input id="videoFiles" type="file" accept=".ts,video/MP2T" multiple />
+        </div>
+        <div class="input hidden" id="fontWrap">
+          <label for="fontFile">Font (TTF) for FFmpeg drawtext</label>
+          <input id="fontFile" type="file" accept=".ttf" />
+        </div>
+        <div class="input">
+          <label for="overlayPosition">Overlay position</label>
+          <select id="overlayPosition">
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-right">Bottom right</option>
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+          </select>
+        </div>
+        <div class="input">
+          <label for="fontSize">Font size (px)</label>
+          <input id="fontSize" type="number" min="10" max="72" value="24" />
+        </div>
+        <div class="actions">
+          <button id="processBtn" disabled>Process Selected</button>
+        </div>
+      </section>
+
+      <section class="status">
+        <h2>Status</h2>
+        <div class="log-controls">
+          <label><input type="checkbox" id="debugToggle"> Verbose logging</label>
+          <button id="clearLogBtn" type="button">Clear</button>
+          <button id="downloadLogBtn" type="button">Download Log</button>
+        </div>
+        <div class="progress-wrap">
+          <progress id="progress" value="0" max="1"></progress>
+          <span id="progressText">Idle</span>
+        </div>
+        <pre id="log"></pre>
+      </section>
+
+      <section class="preview hidden">
+        <h2>Preview</h2>
+        <div class="players">
+          <video id="video" controls playsinline></video>
+          <canvas id="canvas"></canvas>
+        </div>
+      </section>
+
+      <section class="output hidden">
+        <h2>Output</h2>
+        <div id="downloads"></div>
+      </section>
+    </main>
+
+    <footer>
+      <small>
+        Processing happens locally in your browser using <code>ffmpeg.wasm</code> and the Canvas API.
+      </small>
+    </footer>
+
+    <!-- Self-hosted ffmpeg.wasm (no CDN). These files must exist under vendor/ffmpeg/. -->
+    <script src="vendor/ffmpeg/ffmpeg.js"></script>
+    <script>
+      window.FFMPEG_CORE_URL = 'vendor/ffmpeg/ffmpeg-core.js';
+    </script>
+    <!-- Minimal inline log to verify DOM and logging area are present -->
+    <script>
+      (function(){
+        function inlinePing(tag){
+          try {
+            var el = document.getElementById('log');
+            if (el) { el.textContent += tag + '\n'; el.scrollTop = el.scrollHeight; }
+            else { console.log(tag + ' (no #log element)'); }
+          } catch (e) { console.log('inline log error', e); }
+        }
+        if (document.readyState === 'loading') {
+          window.addEventListener('DOMContentLoaded', function(){ inlinePing('[inline] DOMContentLoaded'); }, { once: true });
+        } else {
+          inlinePing('[inline] DOM already ready');
+        }
+      })();
+    </script>
+    <script src="src/app.js"></script>
+  </body>
+  </html>

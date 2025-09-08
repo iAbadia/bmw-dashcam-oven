@@ -72,20 +72,20 @@ function safeStringify(v) { try { return typeof v === 'string' ? v : JSON.string
 function pushLog(level, msg, data) {
   const entry = { t: nowTs(), level, msg: String(msg), data: data ?? null };
   logBuffer.push(entry);
+  const line = `[${entry.t}] ${level.toUpperCase()}: ${entry.msg}` + (entry.data ? `\n  ${safeStringify(entry.data)}` : '');
+  // Always emit to the developer console (hosted or local)
+  try {
+    const c = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'info' ? 'log' : 'log';
+    (console[c] || console.log).call(console, line);
+  } catch {
+    try { console.log(line); } catch {}
+  }
+  // Append to on-page log (gate debug by verbosity)
   if (verbose || level !== 'debug') {
-    const line = `[${entry.t}] ${level.toUpperCase()}: ${entry.msg}` + (entry.data ? `\n  ${safeStringify(entry.data)}` : '');
     const el = document.getElementById('log');
-    // Append to on-page log (if present)
     if (el) {
       el.textContent += line + "\n";
       el.scrollTop = el.scrollHeight;
-    }
-    // Always also emit to the developer console
-    try {
-      const c = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
-      (console[c] || console.log).call(console, line);
-    } catch {
-      try { console.log(line); } catch {}
     }
   }
   window.__appLogs = logBuffer;

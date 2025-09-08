@@ -25,7 +25,36 @@ const progressEl = document.getElementById('progress');
 const progressTextEl = document.getElementById('progressText');
 const previewSection = document.querySelector('section.preview');
 const outputSection = document.querySelector('section.output');
+const statusSection = document.querySelector('section.status');
 let firstFrameDataURL = null;
+
+// Inline progress in the Bake button
+function setBakeProgress(pct) {
+  try { processBtn?.style?.setProperty('--progress', `${Math.max(0, Math.min(1, pct)) * 100}%`); } catch {}
+}
+function setBaking(isBaking) {
+  try {
+    processBtn?.classList?.toggle('baking', !!isBaking);
+    if (isBaking) {
+      processBtn.classList.remove('complete');
+      processBtn.textContent = 'Baking… 0%';
+    } else {
+      processBtn.textContent = 'Bake!';
+    }
+    processBtn?.setAttribute('aria-busy', isBaking ? 'true' : 'false');
+  } catch {}
+}
+function setBakePercentLabel(pct) {
+  try { processBtn.textContent = `Baking… ${Math.round(Math.max(0, Math.min(1, pct)) * 100)}%`; } catch {}
+}
+function setBakeComplete() {
+  try {
+    processBtn.classList.remove('baking');
+    processBtn.classList.add('complete');
+    processBtn.setAttribute('aria-busy', 'false');
+    processBtn.textContent = 'Complete';
+  } catch {}
+}
 
 function markProgressComplete() {
   try {
@@ -171,6 +200,18 @@ function init() {
   try { updateButton(); } catch (e) { console.error('updateButton failed', e); }
   try { const el = document.getElementById('log'); if (el) { el.textContent += '[app] init called\n'; el.scrollTop = el.scrollHeight; } } catch {}
   info('App ready');
+  setBakeProgress(0);
+
+  // Show Status section only when running locally (or if forced via ?status=1)
+  try {
+    const u = new URL(window.location.href);
+    const forceStatus = u.searchParams.get('status') === '1';
+    const disableStatus = u.searchParams.get('status') === '0';
+    const h = window.location.hostname;
+    const isLocal = (h === 'localhost' || h === '127.0.0.1' || h === '::1' || window.location.protocol === 'file:');
+    const shouldShow = forceStatus || (isLocal && !disableStatus);
+    statusSection?.classList?.toggle('hidden', !shouldShow);
+  } catch {}
 }
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', init, { once: true });
@@ -181,6 +222,8 @@ if (document.readyState === 'loading') {
 processBtn.addEventListener('click', async () => {
   try {
     processBtn.disabled = true;
+    setBaking(true);
+    setBakeProgress(0);
     downloadsEl.innerHTML = '';
     // MVP: process the first selected file. Can be extended to batch.
     const inputFile = selectedFiles[0];
@@ -192,11 +235,25 @@ processBtn.addEventListener('click', async () => {
     }
     const method = 'realtime';
     info(`Advanced methods disabled. Using: ${method}`);
-    await processRealtime(inputFile, parsedMeta);
+    let succeeded = false;
+    try {
+      await processRealtime(inputFile, parsedMeta);
+      succeeded = true;
+    } finally {
+      if (succeeded) {
+        setBakeProgress(1);
+        setBakeComplete();
+      }
+    }
   } catch (e) {
     log(`Error: ${e.message}`);
   } finally {
     processBtn.disabled = false;
+    // If not complete, reset UI back to idle state
+    if (!processBtn.classList.contains('complete')) {
+      setBaking(false);
+      setBakeProgress(0);
+    }
   }
 });
 
@@ -340,6 +397,7 @@ async function processRealtime(file, meta) {
     if (progressEl && progressTextEl && Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
       const pct = Math.min(1, Math.max(0, videoEl.currentTime / videoEl.duration));
       progressEl.value = pct;
+      try { setBakeProgress(pct); setBakePercentLabel(pct); } catch {}
       const now = performance.now();
       const dMedia = Math.max(0, videoEl.currentTime - lastMedia);
       const dWall = Math.max(1, now - lastWall);
@@ -369,6 +427,7 @@ async function processRealtime(file, meta) {
 
   await recDone;
   markProgressComplete();
+  try { setBakeProgress(1); } catch {}
   // Restore UI state for players
   try { videoEl.classList.remove('noninteractive'); videoEl.controls = true; } catch {}
   try { videoEl.classList.add('hidden'); canvasEl.classList.add('hidden'); } catch {}

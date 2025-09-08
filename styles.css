@@ -5,6 +5,8 @@
   --muted: #9aa3af;
   --accent: #3b82f6;
   --control-h: 44px;
+  --progress: 0%;
+  --success: #10b981;
 }
 
 * { box-sizing: border-box; }
@@ -112,6 +114,27 @@ button {
 }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Bake button with inline progress */
+#processBtn { position: relative; overflow: hidden; isolation: isolate; }
+#processBtn.baking { cursor: progress; opacity: 1; }
+#processBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: var(--progress);
+  background: linear-gradient(0deg, rgba(255,255,255,0.18), rgba(255,255,255,0.18)) ,
+              repeating-linear-gradient(-45deg, rgba(255,255,255,0.18) 0 10px, rgba(255,255,255,0.28) 10px 20px);
+  mix-blend-mode: soft-light;
+  z-index: -1; /* under text */
+  transition: width 120ms ease-out;
+}
+#processBtn.baking::before { animation: stripeShift 800ms linear infinite; }
+@keyframes stripeShift { from { background-position: 0 0, 0 0; } to { background-position: 40px 0, 40px 0; } }
+
+/* Complete state */
+#processBtn.complete { background: var(--success); }
+#processBtn.complete::before { animation: none; width: 100%; background: rgba(255,255,255,0.18); }
+
 .status pre {
   white-space: pre-wrap;
   max-height: 200px;
@@ -135,5 +158,4 @@ footer small { color: var(--muted); }
 
 .hidden { display: none !important; }
 .noninteractive { pointer-events: none; user-select: none; }
-.progress-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 progress { width: 260px; height: 12px; }

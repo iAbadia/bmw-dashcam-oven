@@ -325,11 +325,18 @@ async function processRealtime(file, meta) {
 
   const fps = getApproxFrameRate(videoEl) || 30;
   const stream = canvasEl.captureStream(fps);
-  const mime = selectBestMimeType();
+  const hasAudio = (stream.getAudioTracks?.().length || 0) > 0;
+  const mime = selectBestMimeType(hasAudio);
+  info(`MediaRecorder mime selected: ${mime || '(default)'}, audioTracks=${hasAudio ? 'yes' : 'no'}`);
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
   const chunks = [];
   // Capture chunks
-  recorder.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
+  recorder.addEventListener('dataavailable', (e) => {
+    const size = e?.data?.size || 0;
+    debug('MediaRecorder dataavailable', { size });
+    if (size) chunks.push(e.data);
+  });
+  recorder.addEventListener('start', () => debug('MediaRecorder start'));
   // Log recorder errors if any (seen on some hosted environments)
   recorder.addEventListener('error', (e) => {
     try { error('MediaRecorder error', { name: e?.name || e?.error?.name, message: e?.message || e?.error?.message }); } catch {}
@@ -350,6 +357,8 @@ async function processRealtime(file, meta) {
 
   info(`Video duration: ${videoEl.duration.toFixed(2)}s, fps≈${fps}, entries=${totalEntries}, dt≈${dt.toFixed(3)}s`);
 
+  // Prime canvas with a trivial draw to ensure captureStream produces frames across browsers
+  try { ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0, 0, 1, 1); ctx.clearRect(0, 0, 1, 1); } catch {}
   // Start recording and playback
   // Use a 1s timeslice so Firefox emits periodic dataavailable chunks
   recorder.start(1000);
@@ -593,15 +602,21 @@ function getApproxFrameRate(video) {
   return 30;
 }
 
-function selectBestMimeType() {
-  const candidates = [
-    'video/webm;codecs=vp8,opus',
-    'video/webm;codecs=vp9,opus',
-    'video/webm',
-    'video/mp4', // usually not supported by MediaRecorder
-  ];
+function selectBestMimeType(hasAudio) {
+  // Prefer codecs that match available tracks; Firefox can be picky if audio is declared but absent
+  const candidates = hasAudio
+    ? [
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm',
+      ]
+    : [
+        'video/webm;codecs=vp8',
+        'video/webm;codecs=vp9',
+        'video/webm',
+      ];
   for (const m of candidates) {
-    if (MediaRecorder.isTypeSupported(m)) return m;
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch {}
   }
   return '';
 }

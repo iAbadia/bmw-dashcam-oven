@@ -354,6 +354,24 @@ async function processRealtime(file, meta) {
   };
   videoEl.addEventListener('ended', stopAll, { once: true });
 
+  // Guards: ensure we stop even if 'ended' doesn't fire (seen on some hosted environments)
+  const endEpsilonSec = 0.05;
+  const onTimeUpdate = () => {
+    try {
+      if (!stopped && Number.isFinite(videoEl.duration) && videoEl.duration > 0 && videoEl.currentTime >= (videoEl.duration - endEpsilonSec)) {
+        debug('Guard: timeupdate reached end, stopping');
+        stopAll();
+      }
+    } catch {}
+  };
+  videoEl.addEventListener('timeupdate', onTimeUpdate);
+  const safetyTimer = setTimeout(() => {
+    if (!stopped) {
+      warn('Guard: safety timer elapsed, stopping recorder');
+      stopAll();
+    }
+  }, Math.max(10000, Math.round((videoEl.duration || 0) * 1000) + 5000));
+
   let lastWall = performance.now();
   let lastMedia = 0;
   const drawOverlay = (t) => {
@@ -426,6 +444,8 @@ async function processRealtime(file, meta) {
   }
 
   await recDone;
+  try { clearTimeout(safetyTimer); } catch {}
+  try { videoEl.removeEventListener('timeupdate', onTimeUpdate); } catch {}
   markProgressComplete();
   try { setBakeProgress(1); } catch {}
   // Restore UI state for players

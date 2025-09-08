@@ -587,37 +587,25 @@ async function showFirstFramePreview(file) {
   videoEl.classList.add('noninteractive');
   videoEl.muted = true;
 
-  // Try direct TS first; if it fails to load metadata quickly, remux to MP4
-  const tryLoad = async (url) => {
-    return new Promise(async (resolve, reject) => {
-      let done = false;
-      const cleanup = () => {
-        videoEl.onloadedmetadata = null;
-        videoEl.onloadeddata = null;
-        videoEl.onerror = null;
-      };
-      videoEl.onerror = () => { if (done) return; done = true; cleanup(); reject(new Error('video error')); };
-      videoEl.onloadedmetadata = async () => {
-        try { videoEl.currentTime = 0.01; } catch {}
-      };
-      videoEl.onloadeddata = () => { if (done) return; done = true; cleanup(); resolve(); };
-      videoEl.src = url;
-      try { await videoEl.load?.(); } catch {}
-      // Timeout fallback
-      setTimeout(() => { if (!done) { cleanup(); reject(new Error('preview timeout')); } }, 2000);
-    });
-  };
-
-  let url = URL.createObjectURL(file);
-  try {
-    await tryLoad(url);
-  } catch {
-    // Remux to MP4 for better compatibility
-    try { URL.revokeObjectURL(url); } catch {}
-    const mp4Blob = await remuxTsToMp4(file);
-    url = URL.createObjectURL(mp4Blob);
-    await tryLoad(url);
-  }
+  // Always remux to MP4 for better compatibility and to avoid blob Content-Type issues
+  const mp4Blob = await remuxTsToMp4(file);
+  const url = URL.createObjectURL(mp4Blob);
+  await new Promise(async (resolve, reject) => {
+    let done = false;
+    const cleanup = () => {
+      videoEl.onloadedmetadata = null;
+      videoEl.onloadeddata = null;
+      videoEl.onerror = null;
+    };
+    videoEl.onerror = () => { if (done) return; done = true; cleanup(); reject(new Error('video error')); };
+    videoEl.onloadedmetadata = async () => {
+      try { videoEl.currentTime = 0.01; } catch {}
+    };
+    videoEl.onloadeddata = () => { if (done) return; done = true; cleanup(); resolve(); };
+    videoEl.src = url;
+    try { await videoEl.load?.(); } catch {}
+    setTimeout(() => { if (!done) { cleanup(); reject(new Error('preview timeout')); } }, 2000);
+  });
 
   // Draw the frame to canvas so it shows even if the <video> is paused/hidden later
   try {

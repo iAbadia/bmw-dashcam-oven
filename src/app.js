@@ -75,12 +75,17 @@ function pushLog(level, msg, data) {
   if (verbose || level !== 'debug') {
     const line = `[${entry.t}] ${level.toUpperCase()}: ${entry.msg}` + (entry.data ? `\n  ${safeStringify(entry.data)}` : '');
     const el = document.getElementById('log');
+    // Append to on-page log (if present)
     if (el) {
       el.textContent += line + "\n";
       el.scrollTop = el.scrollHeight;
-    } else {
-      // Fallback to console if UI not yet ready
-      try { console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](line); } catch { console.log(line); }
+    }
+    // Always also emit to the developer console
+    try {
+      const c = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
+      (console[c] || console.log).call(console, line);
+    } catch {
+      try { console.log(line); } catch {}
     }
   }
   window.__appLogs = logBuffer;

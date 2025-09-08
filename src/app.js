@@ -328,8 +328,16 @@ async function processRealtime(file, meta) {
   const mime = selectBestMimeType();
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
   const chunks = [];
-  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-  const recDone = new Promise((resolve) => recorder.onstop = resolve);
+  // Capture chunks
+  recorder.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
+  // Log recorder errors if any (seen on some hosted environments)
+  recorder.addEventListener('error', (e) => {
+    try { error('MediaRecorder error', { name: e?.name || e?.error?.name, message: e?.message || e?.error?.message }); } catch {}
+  });
+  // Promise that resolves when recorder stops (with a manual resolver fallback)
+  let resolveRecDone;
+  const recDone = new Promise((resolve) => { resolveRecDone = resolve; });
+  recorder.addEventListener('stop', () => { try { resolveRecDone && resolveRecDone(); } catch {} });
 
   // 3) Draw loop using requestVideoFrameCallback if available, else fallback
   const pos = overlayPositionEl.value;
@@ -354,8 +362,17 @@ async function processRealtime(file, meta) {
   const stopAll = () => {
     if (stopped) return;
     stopped = true;
+    // Try to flush final data before stopping
+    try { recorder.requestData?.(); } catch {}
+    // Stop recorder robustly; on some browsers stop() may throw if already inactive
+    try {
+      debug(`Stopping recorder (state=${recorder.state})`);
+      recorder.stop();
+    } catch (e) {
+      warn('recorder.stop threw', { state: recorder?.state, message: e?.message || String(e) });
+      try { resolveRecDone && resolveRecDone(); } catch {}
+    }
     try { videoEl.pause(); } catch {}
-    try { recorder.stop(); } catch {}
   };
   videoEl.addEventListener('ended', stopAll, { once: true });
 
@@ -448,10 +465,18 @@ async function processRealtime(file, meta) {
     loop();
   }
 
-  await recDone;
+  // Wait for recorder to stop, but don't hang forever
+  try {
+    await Promise.race([
+      recDone,
+      new Promise((r) => setTimeout(r, 5000)), // fallback in case 'stop' never fires
+    ]);
+  } catch {}
   try { clearTimeout(safetyTimer); } catch {}
   try { videoEl.removeEventListener('timeupdate', onTimeUpdate); } catch {}
   markProgressComplete();
+  // Proactively stop capture tracks to free resources
+  try { stream.getTracks?.().forEach(t => { try { t.stop(); } catch {} }); } catch {}
   try { setBakeProgress(1); } catch {}
   // Restore UI state for players
   try { videoEl.classList.remove('noninteractive'); videoEl.controls = true; } catch {}
@@ -462,6 +487,9 @@ async function processRealtime(file, meta) {
   const outMime = recorder.mimeType && typeof recorder.mimeType === 'string' && recorder.mimeType.length
     ? recorder.mimeType
     : 'video/webm';
+  if (!chunks.length) {
+    warn('No chunks recorded. Output may be empty.');
+  }
   const totalBytes = chunks.reduce((a, b) => a + (b?.size || 0), 0);
   info(`Recorder stopped. Chunks: ${chunks.length}, total ${formatBytes(totalBytes)}, mime=${outMime}`);
   const outBlob = new Blob(chunks, { type: outMime });

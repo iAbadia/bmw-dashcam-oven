@@ -351,8 +351,8 @@ async function processRealtime(file, meta) {
   info(`Video duration: ${videoEl.duration.toFixed(2)}s, fps≈${fps}, entries=${totalEntries}, dt≈${dt.toFixed(3)}s`);
 
   // Start recording and playback
-  // Start without timeslice for better cross-browser reliability (emit at stop/requestData)
-  recorder.start();
+  // Use a 1s timeslice so Firefox emits periodic dataavailable chunks
+  recorder.start(1000);
   videoEl.currentTime = 0;
   videoEl.addEventListener('playing', () => debug('video playing'));
   videoEl.addEventListener('pause', () => debug('video paused'));
@@ -360,6 +360,8 @@ async function processRealtime(file, meta) {
   await videoEl.play();
 
   let stopped = false;
+  let resolveStopSignal;
+  const stoppedSignal = new Promise((r) => { resolveStopSignal = r; });
   const stopAll = () => {
     if (stopped) return;
     stopped = true;
@@ -375,6 +377,7 @@ async function processRealtime(file, meta) {
       try { resolveRecDone && resolveRecDone(); } catch {}
     }
     try { videoEl.pause(); } catch {}
+    try { resolveStopSignal && resolveStopSignal(); } catch {}
   };
   videoEl.addEventListener('ended', stopAll, { once: true });
 
@@ -467,14 +470,17 @@ async function processRealtime(file, meta) {
     loop();
   }
 
-  // Wait for recorder to stop, but don't hang forever
-  debug('Waiting for recorder stop...');
+  // First, wait until processing naturally reaches the end or guards stop it
+  debug('Waiting for processing to reach end...');
+  try { await stoppedSignal; } catch {}
+  // Then, wait briefly for the recorder to deliver its final stop
+  debug('Reached end. Waiting for MediaRecorder to stop...');
   try {
     const STOP = 'stop';
     const TIMEOUT = 'timeout';
     const result = await Promise.race([
       recDone.then(() => STOP),
-      new Promise((r) => setTimeout(() => r(TIMEOUT), 5000)), // fallback in case 'stop' never fires
+      new Promise((r) => setTimeout(() => r(TIMEOUT), 3000)),
     ]);
     debug(`Recorder wait result: ${result}`);
   } catch (e) {

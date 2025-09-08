@@ -60,6 +60,19 @@
           <label for="fontSize">Font size (px)</label>
           <input id="fontSize" type="number" min="10" max="72" value="24" />
         </div>
+        <div class="input">
+          <label for="outputFormat">Output format</label>
+          <select id="outputFormat">
+            <option value="auto" selected>Auto (best available)</option>
+            <option value="webm-vp8">WebM (VP8)</option>
+            <option value="webm-vp9">WebM (VP9)</option>
+            <option value="mp4-h264">MP4 (H.264) — experimental</option>
+          </select>
+        </div>
+        <div class="input">
+          <label for="videoBitrate">Video bitrate (Mbps)</label>
+          <input id="videoBitrate" type="number" min="1" max="50" step="1" value="12" />
+        </div>
         <div class="actions">
           <button id="processBtn" disabled>Bake!</button>
         </div>

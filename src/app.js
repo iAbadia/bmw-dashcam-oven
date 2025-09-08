@@ -21,6 +21,8 @@ const canvasEl = document.getElementById('canvas');
 const downloadsEl = document.getElementById('downloads');
 const overlayPositionEl = document.getElementById('overlayPosition');
 const fontSizeEl = document.getElementById('fontSize');
+const outputFormatEl = document.getElementById('outputFormat');
+const videoBitrateEl = document.getElementById('videoBitrate');
 const progressEl = document.getElementById('progress');
 const progressTextEl = document.getElementById('progressText');
 const previewSection = document.querySelector('section.preview');
@@ -324,11 +326,26 @@ async function processRealtime(file, meta) {
   const ctx = canvasEl.getContext('2d');
 
   const fps = getApproxFrameRate(videoEl) || 30;
-  const stream = canvasEl.captureStream(fps);
+  const canvasStream = canvasEl.captureStream(fps);
+  // Try to carry over audio from the video element (if present)
+  let combined = new MediaStream();
+  try {
+    canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    const mediaStream = typeof videoEl.captureStream === 'function' ? videoEl.captureStream() : null;
+    const audioTracks = mediaStream ? mediaStream.getAudioTracks() : [];
+    if (audioTracks && audioTracks.length) {
+      audioTracks.forEach(t => combined.addTrack(t));
+      debug('Attached audio track from source video');
+    }
+  } catch (e) { warn('Failed to attach audio track', { message: e?.message || String(e) }); }
+  const stream = combined.getTracks().length ? combined : canvasStream;
   const hasAudio = (stream.getAudioTracks?.().length || 0) > 0;
-  const mime = selectBestMimeType(hasAudio);
-  info(`MediaRecorder mime selected: ${mime || '(default)'}, audioTracks=${hasAudio ? 'yes' : 'no'}`);
-  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
+  const desiredFmt = outputFormatEl?.value || 'auto';
+  const mime = selectBestMimeType(hasAudio, desiredFmt);
+  const bitrateMbps = parseInt(videoBitrateEl?.value || '12', 10);
+  const vbps = Math.max(1, isFinite(bitrateMbps) ? bitrateMbps : 12) * 1_000_000;
+  info(`MediaRecorder mime selected: ${mime || '(default)'}, audioTracks=${hasAudio ? 'yes' : 'no'}, bitrate=${(vbps/1_000_000).toFixed(0)} Mbps`);
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: vbps });
   const chunks = [];
   // Capture chunks
   recorder.addEventListener('dataavailable', (e) => {
@@ -602,22 +619,22 @@ function getApproxFrameRate(video) {
   return 30;
 }
 
-function selectBestMimeType(hasAudio) {
-  // Prefer codecs that match available tracks; Firefox can be picky if audio is declared but absent
-  const candidates = hasAudio
-    ? [
-        'video/webm;codecs=vp8,opus',
-        'video/webm;codecs=vp9,opus',
-        'video/webm',
-      ]
-    : [
-        'video/webm;codecs=vp8',
-        'video/webm;codecs=vp9',
-        'video/webm',
-      ];
+function selectBestMimeType(hasAudio, desiredFmt = 'auto') {
+  // Build desired-first candidate list
+  const lists = {
+    'webm-vp8': hasAudio ? ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp8'] : ['video/webm;codecs=vp8', 'video/webm'],
+    'webm-vp9': hasAudio ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp9'] : ['video/webm;codecs=vp9', 'video/webm'],
+    'mp4-h264': hasAudio ? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E'] : ['video/mp4;codecs=avc1.42E01E', 'video/mp4'],
+  };
+  const baseAuto = hasAudio
+    ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  const desired = desiredFmt && lists[desiredFmt] ? lists[desiredFmt] : [];
+  const candidates = [...desired, ...baseAuto];
   for (const m of candidates) {
     try { if (MediaRecorder.isTypeSupported(m)) return m; } catch {}
   }
+  // As a last resort, let the browser decide
   return '';
 }
 

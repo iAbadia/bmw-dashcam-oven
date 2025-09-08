@@ -351,7 +351,8 @@ async function processRealtime(file, meta) {
   info(`Video duration: ${videoEl.duration.toFixed(2)}s, fps≈${fps}, entries=${totalEntries}, dt≈${dt.toFixed(3)}s`);
 
   // Start recording and playback
-  recorder.start(1000); // timeslice 1s
+  // Start without timeslice for better cross-browser reliability (emit at stop/requestData)
+  recorder.start();
   videoEl.currentTime = 0;
   videoEl.addEventListener('playing', () => debug('video playing'));
   videoEl.addEventListener('pause', () => debug('video paused'));
@@ -362,8 +363,9 @@ async function processRealtime(file, meta) {
   const stopAll = () => {
     if (stopped) return;
     stopped = true;
+    debug('stopAll: initiating stop');
     // Try to flush final data before stopping
-    try { recorder.requestData?.(); } catch {}
+    try { debug('stopAll: requestData'); recorder.requestData?.(); } catch {}
     // Stop recorder robustly; on some browsers stop() may throw if already inactive
     try {
       debug(`Stopping recorder (state=${recorder.state})`);
@@ -466,12 +468,18 @@ async function processRealtime(file, meta) {
   }
 
   // Wait for recorder to stop, but don't hang forever
+  debug('Waiting for recorder stop...');
   try {
-    await Promise.race([
-      recDone,
-      new Promise((r) => setTimeout(r, 5000)), // fallback in case 'stop' never fires
+    const STOP = 'stop';
+    const TIMEOUT = 'timeout';
+    const result = await Promise.race([
+      recDone.then(() => STOP),
+      new Promise((r) => setTimeout(() => r(TIMEOUT), 5000)), // fallback in case 'stop' never fires
     ]);
-  } catch {}
+    debug(`Recorder wait result: ${result}`);
+  } catch (e) {
+    warn('Recorder wait threw', { message: e?.message || String(e) });
+  }
   try { clearTimeout(safetyTimer); } catch {}
   try { videoEl.removeEventListener('timeupdate', onTimeUpdate); } catch {}
   markProgressComplete();

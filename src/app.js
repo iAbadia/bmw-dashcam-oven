@@ -147,7 +147,6 @@ async function handleMetadataChange() {
   updateButton();
 }
 metadataInput.addEventListener('change', handleMetadataChange);
-metadataInput.addEventListener('input', handleMetadataChange);
 
 function handleVideoChange() {
   selectedFiles = Array.from(videoInput.files || []);
@@ -159,7 +158,6 @@ function handleVideoChange() {
   updateButton();
 }
 videoInput.addEventListener('change', handleVideoChange);
-videoInput.addEventListener('input', handleVideoChange);
 
 function updateButton() {
   const hasMetaFile = !!(metadataInput?.files && metadataInput.files.length > 0);

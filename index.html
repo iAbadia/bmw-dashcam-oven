@@ -3,14 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BMW Dashcam Metadata Burner</title>
+    <title>BMW Dashcam Oven</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" href="assets/favicon.png" type="image/png" />
     <meta name="description" content="Burn BMW dashcam metadata (date/time/speed/GPS) into video in your browser." />
   </head>
   <body>
-    <header>
-      <h1>BMW Dashcam Metadata Burner</h1>
-      <p>Works in your browser. No uploads. Ideal for GitHub Pages.</p>
+    <header class="site-header">
+      <div class="brand">
+        <img src="assets/favicon.png" alt="BMW dashcam oven" class="logo" width="40" height="40" />
+        <div class="title">
+          <h1>BMW Dashcam Oven</h1>
+          <p>Burn-in time, speed, and GPS overlays - locally.</p>
+        </div>
+        <div class="badges">
+          <span class="badge">No uploads</span>
+          <span class="badge">In-browser</span>
+        </div>
+      </div>
     </header>
 
     <main>
@@ -47,7 +57,7 @@
           <input id="fontSize" type="number" min="10" max="72" value="24" />
         </div>
         <div class="actions">
-          <button id="processBtn" disabled>Process Selected</button>
+          <button id="processBtn" disabled>Bake!</button>
         </div>
       </section>
 
@@ -79,11 +89,7 @@
       </section>
     </main>
 
-    <footer>
-      <small>
-        Processing happens locally in your browser using <code>ffmpeg.wasm</code> and the Canvas API.
-      </small>
-    </footer>
+    
 
     <!-- Self-hosted ffmpeg.wasm (no CDN). These files must exist under vendor/ffmpeg/. -->
     <script src="vendor/ffmpeg/ffmpeg.js"></script>
